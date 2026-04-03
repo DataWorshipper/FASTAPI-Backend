@@ -1,4 +1,4 @@
-# 🚀 FastAPI High-Performance Social Media API
+#  FastAPI High-Performance Social Media API
 
 A robust, production-ready backend for a social media platform built with **FastAPI**, **PostgreSQL**, and **Docker**.
 
