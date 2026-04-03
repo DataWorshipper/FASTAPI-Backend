@@ -16,7 +16,14 @@ SQLALCHEMY_DATABASE_URL = (
     f"@{os.getenv('DB_HOST')}:5432/"
     f"{os.getenv('DB_NAME')}"
 )
-engine=create_engine(SQLALCHEMY_DATABASE_URL,echo=True)
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    pool_size=50,        
+    max_overflow=100,     
+    pool_timeout=30,
+    pool_recycle=1800,
+    echo=True
+)
 
 SessionLocal=sessionmaker(autocommit=False,autoflush=False,bind=engine)
 Base=declarative_base()
