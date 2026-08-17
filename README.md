@@ -1,4 +1,4 @@
-#  FastAPI High-Performance Social Media API
+#  FastAPI Social Media API
 
 A robust backend for a social media platform built with **FastAPI**, **PostgreSQL**, and **Docker** — JWT authentication, full post/vote CRUD, Alembic migrations, and a pytest + Locust testing suite.
 
@@ -103,27 +103,6 @@ Breaking down every failure at the 500-user stage instead of just reporting the 
 | `401 Unauthorized` cascades on `/posts/` | 64% |
 | `RemoteDisconnected` (connection dropped mid-request) | 29% |
 | Client-side socket errors (`WinError 10053`/`10054`) | 7% |
-
-Server logs during the run showed **zero Python exceptions or tracebacks** — the FastAPI app itself never crashed. The actual chain:
-
-1. **Root trigger:** `/login` is a synchronous route, and Argon2 password verification is deliberately CPU-expensive by design. FastAPI runs sync routes on a bounded thread pool, and at 500 concurrent logins arriving near-simultaneously, that pool becomes the bottleneck — logins queue instead of running immediately.
-2. **Symptom 1 (29% + 7% of failures):** connections sitting queued long enough get torn down by the OS/Docker Desktop networking layer before a response is ever sent (`RemoteDisconnected`, `ConnectionResetError`).
-3. **Symptom 2 (64% of failures):** any simulated user whose login was dropped or too slow never got a valid token in time, so its *next* request correctly gets rejected with `401` — one slow login cascading into several downstream "failures" that are really just one root cause counted multiple times.
-
-**One-line takeaway:** the bottleneck is Argon2's CPU cost interacting with synchronous request handling under load — not a database bug, not a logic bug, and (per the earlier connection-pool tuning below) not a connection-starvation issue either. A 1000-user stage was also run and reproduces the same failure mode at a larger scale, consistent with this root cause — it's excluded from the table above since 500 users is the last stage with a clean, fully-understood story end to end.
-
-### Fixes already applied (getting from "100% failures" to the table above)
-
-- **64 Connection Limit (Windows)** — `ValueError: too many file descriptors in select()`. Fixed by moving to Docker (Linux `epoll`).
-- **Connection Starvation** — default SQLAlchemy pool size (`5`) caused near-total failure at ~200 users. Fixed via engine tuning:
-  ```python
-  pool_size=50
-  max_overflow=100
-  ```
-  plus PostgreSQL `max_connections=300` and 4 Uvicorn workers.
-- **Argon2 memory exhaustion (OOM)** — default Argon2 cost parameters, combined with concurrent hashing under load, exhausted the Docker Desktop VM's memory allocation and got the app container OOM-killed outright. Tuned to lighter, still-secure cost parameters (`memory_cost=19456, time_cost=2, parallelism=1`), which eliminated the OOM kills entirely — this is what took the 100-user stage from ~47% failures to 0.08%.
-
----
 
 ##  Testing Suite
 
