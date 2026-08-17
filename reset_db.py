@@ -1,6 +1,5 @@
 import os
 from sqlalchemy import create_engine, text
-# Importing the URL directly from your existing database file
 from app.database import SQLALCHEMY_DATABASE_URL 
 from dotenv import load_dotenv
 
